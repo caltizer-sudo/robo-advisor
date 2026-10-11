@@ -45,3 +45,4 @@ State the **goal**, the **files touched**, and the **tests added or updated**. I
 - [ ] The default persona shows about 70% stocks (49% at 67), plan success of about 69%, and three advice levers on the Recommendation tab.
 - [ ] The stress toggle leaves the allocation unchanged and lowers success (about 69% → 45%). The Social Security cut checkbox also changes the results.
 - [ ] Open the Streamlit Cloud link 5 minutes before presenting so it wakes up.
+- [ ] After any push that changes `robo/*`, check the live app, not just `pytest`. Streamlit Cloud hot-reloads `app.py` but can keep the old `robo/*` modules in memory; the symptom is a `TypeError`/`AttributeError` that does not reproduce locally (v0.3.0 hit this with `fan_chart`'s new `y_max` argument). Fix: **Manage app → Reboot app**, or bump the `redeploy-marker` comment in `requirements.txt`, which forces a full redeploy.

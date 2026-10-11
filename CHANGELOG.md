@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.3.1 (2026-10-11): force full redeploy (Perplexity Computer)
+- `requirements.txt` gains a `redeploy-marker` comment: Streamlit Cloud kept the v0.2 `charts.py` in memory after the v0.3.0 push, so the live app raised `TypeError` on `fan_chart(..., y_max)` while the code passed locally. Documented the symptom and fix in `docs/COLLABORATION.md`. No code changes.
+
 ## 0.3.0 (2026-10-11): stress view consistency (Claude, from Perplexity Computer's v0.2 review)
 - With the stress test on, every Projections metric shows **base → stress** (plan success, median wealth at plan end, run-out risk), and the base and stress fan charts sit side by side on the same scale. Previously, base-case metrics sat above a stress-only chart.
 - METHODOLOGY.md and the glide-path caption explain why weights are flat early in a career (horizon credit is capped at a 30-year duration).

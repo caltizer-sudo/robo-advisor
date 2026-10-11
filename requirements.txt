@@ -3,3 +3,7 @@ plotly>=5.24
 numpy>=1.26
 pandas>=2.1
 scipy>=1.11
+# Streamlit Community Cloud only does a full restart when this file changes; code-only pushes
+# hot-reload app.py but can leave already-imported robo/* modules cached. Bump this line to force
+# a full redeploy if the live app shows an error that does not reproduce locally.
+# redeploy-marker: 2026-10-11 v0.3.1
