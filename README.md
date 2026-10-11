@@ -1,5 +1,7 @@
 # Robo-Advisor (MSFO 6831, Unit 3)
 
+**Live app:** <https://scqubx2arm6ms5putx6eyb.streamlit.app> · **Repo:** <https://github.com/caltizer-sudo/robo-advisor>
+
 A goals-based robo-advisor built for Georgetown University's MSFO 6831 (Unit 3: Robo Advisers and the Montgomery County Employee Retirement System). It:
 
 1. **Asks about the client's situation:** age, retirement age, savings, income and income growth, current and future savings rates, employer match, retirement spending goal, Social Security, college goals for children, a bequest goal, and fees.
