@@ -54,7 +54,7 @@ def md(text: str) -> str:
 
 def stat(col, label: str, value: str, note: str | None = None, help: str | None = None) -> None:
     """A metric with static context underneath (st.metric deltas imply gains or losses)."""
-    col.metric(label, value, help=help)
+    col.metric(label, md(value), help=help)
     if note:
         col.caption(md(note))
 
@@ -302,8 +302,9 @@ with tab_rec:
 
     st.plotly_chart(charts.glide_path_area(a, ages, W, profile.retire_age, profile.age), theme=None,
                     config={"displayModeBar": False})
-    st.caption("Your risk *capacity* is recomputed every year, so the mix shifts toward bonds as retirement "
-               "approaches and keeps easing through retirement; the TIPS share of bonds rises from 15% to 40%. "
+    st.caption("Your risk *capacity* is recomputed every year. The mix holds steady while your spending horizon "
+               "is 30+ years away, shifts toward bonds as retirement approaches, and keeps easing through "
+               "retirement; the TIPS share of bonds rises from 15% to 40%. "
                "Black dots: Vanguard's target-date glide path (90% stocks at 25, 50% at 65, 30% from 72).")
 
     c1, c2 = st.columns([3, 2], gap="large")
@@ -330,29 +331,43 @@ with tab_rec:
 
 # ------------------------------------------------------------------ tab 3: projections
 with tab_proj:
+    ri = min(ret_idx, len(res.pct[50]) - 1)
     m = st.columns(4)
-    stat(m[0], "Plan success", f"{res.success*100:.0f}%",
-         f"2022 stress test: {res_stress.success*100:.0f}%" if res_stress is not None else f"target {TARGET_SUCCESS*100:.0f}%",
-         help=f"Share of 2,000 simulated markets in which spending is fully funded to age {profile.plan_age}.")
-    stat(m[1], f"Median at {profile.retire_age}", money(res.pct[50][min(ret_idx, len(res.pct[50]) - 1)]), "today's dollars")
-    stat(m[2], "Spending goal", f"{money(need)}/yr", f"Social Security covers {money(profile.social_security())}")
-    stat(m[3], "Run-out risk", f"{res.ruin_while_alive*100:.0f}%", "while still alive",
-         help="Chance of running out of money while still alive (each scenario weighted by survival odds).")
-
-    if res_stress is not None:
+    if res_stress is None:
+        stat(m[0], "Plan success", f"{res.success*100:.0f}%", f"target {TARGET_SUCCESS*100:.0f}%",
+             help=f"Share of 2,000 simulated markets in which spending is fully funded to age {profile.plan_age}.")
+        stat(m[1], f"Median at {profile.retire_age}", money(res.pct[50][ri]), "today's dollars")
+        stat(m[2], "Spending goal", f"{money(need)}/yr", f"Social Security covers {money(profile.social_security())}")
+        stat(m[3], "Run-out risk", f"{res.ruin_while_alive*100:.0f}%", "while still alive",
+             help="Chance of running out of money while still alive (each scenario weighted by survival odds).")
+        st.plotly_chart(charts.fan_chart(res.ages, res.pct, profile.retire_age,
+                                         "Projected savings by age, in today's dollars (2,000 simulated markets)"),
+                        theme=None, config={"displayModeBar": False})
+    else:
+        # every number shows base -> stress, so metrics and charts never disagree
+        end = len(res.pct[50]) - 1
+        stat(m[0], "Plan success", f"{res.success*100:.0f}% → {res_stress.success*100:.0f}%", "base → 2022 stress",
+             help=f"Share of 2,000 simulated markets in which spending is fully funded to age {profile.plan_age}.")
+        stat(m[1], f"Median at {profile.plan_age}", f"{money(res.pct[50][end])} → {money(res_stress.pct[50][end])}",
+             "base → stress, today's dollars")
+        stat(m[2], "Spending goal", f"{money(need)}/yr", f"Social Security covers {money(profile.social_security())}")
+        stat(m[3], "Run-out risk", f"{res.ruin_while_alive*100:.0f}% → {res_stress.ruin_while_alive*100:.0f}%",
+             "base → stress, while still alive",
+             help="Chance of running out of money while still alive (each scenario weighted by survival odds).")
         st.warning(md(
             f"**2022 stress test:** with your portfolio unchanged, a repeat of 2022 in your first year of retirement "
             f"(real losses: U.S. stocks {a.replay_2022[0]*100:.0f}%, bonds {a.replay_2022[3]*100:.0f}%, "
             f"TIPS {a.replay_2022[4]*100:.0f}%) plus stocks and bonds moving together cuts plan success from "
             f"{res.success*100:.0f}% to **{res_stress.success*100:.0f}%** "
             f"({(res_stress.success-res.success)*100:+.0f} points). Sequence risk is largest right at retirement."))
-        st.plotly_chart(charts.fan_chart(res_stress.ages, res_stress.pct, profile.retire_age,
-                                         "Stress test: projected savings by age, in today's dollars"),
+        y_max = 1.05 * max(float(res.pct[90].max()), float(res_stress.pct[90].max()))
+        c1, c2 = st.columns(2, gap="large")
+        c1.plotly_chart(charts.fan_chart(res.ages, res.pct, profile.retire_age, "Base case", y_max),
                         theme=None, config={"displayModeBar": False})
-    else:
-        st.plotly_chart(charts.fan_chart(res.ages, res.pct, profile.retire_age,
-                                         "Projected savings by age, in today's dollars (2,000 simulated markets)"),
+        c2.plotly_chart(charts.fan_chart(res_stress.ages, res_stress.pct, profile.retire_age,
+                                         "2022 stress test (same portfolio)", y_max),
                         theme=None, config={"displayModeBar": False})
+        st.caption("Projected savings by age in today's dollars, 2,000 simulated markets each, on the same scale.")
 
     st.subheader("Advice")
     levers_card()

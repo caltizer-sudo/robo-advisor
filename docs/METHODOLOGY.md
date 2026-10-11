@@ -39,6 +39,7 @@ The planner works in real (today's) dollars, so inflation surprises are a risk, 
 
 - **Horizon** works like the duration of the remaining goal: (years until withdrawals start) + (years of withdrawals) / 2, with full credit at 30 years. It keeps falling throughout retirement.
 - **Transition:** working-life capacity blends linearly into retirement capacity over the final 10 working years. This avoids a jump at the retirement date.
+- **Why the allocation is flat early in a career:** horizon credit is capped once the goal's duration reaches 30 years. With a 30-year retirement, withdrawals contribute 15 years of duration, so the cap binds until about 15 years before retirement. For the default persona (retiring at 67, plan to 97), weights are identical from 30 through 52 and start declining at 53, 14 years out; the decline steepens once the 10-year transition to retirement capacity begins at 57. This is deliberate: an extra year of horizon matters little when the money is 30+ years from being spent. Target-date funds likewise hold a constant stock share early in a career.
 - **Mapping:** the combined score maps **linearly** onto the frontier's volatility range: σ = σ_min + score/100 × (σ_cap − σ_min).
 - **The cap:** σ_cap is the portfolio with the highest expected compound return, about 83% stocks today. Beyond it, extra risk lowers expected growth.
 - **Resulting glide paths** (stock share at ages 30 / 67 / 80 / 90):

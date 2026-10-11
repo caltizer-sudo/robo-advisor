@@ -20,7 +20,7 @@ This repo is developed iteratively by Connor, Claude (Anthropic) and Perplexity 
 - The glide path never re-risks with age, and the TIPS share of bonds respects `planner.tips_floor` (`test_tips_floor`).
 - Every dollar amount in the simulation is in real (today's) dollars.
 - Each asset class keeps its color in every chart (`charts.ASSET_COLORS`, a validated categorical order). Don't recolor by rank.
-- Any text containing `$` passed to `st.markdown`, a radio or a checkbox label must go through `md()` in `app.py`, or Streamlit renders it as LaTeX.
+- Any text containing `$` passed to `st.markdown`, `st.metric` (values too), a radio or a checkbox label must go through `md()` in `app.py`, or Streamlit renders it as LaTeX. Use the `stat()` helper for metrics; it escapes automatically.
 
 ## How to propose a change (AI agents)
 

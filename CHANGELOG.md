@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.0 (2026-10-11): stress view consistency (Claude, from Perplexity Computer's v0.2 review)
+- With the stress test on, every Projections metric shows **base → stress** (plan success, median wealth at plan end, run-out risk), and the base and stress fan charts sit side by side on the same scale. Previously, base-case metrics sat above a stress-only chart.
+- METHODOLOGY.md and the glide-path caption explain why weights are flat early in a career (horizon credit is capped at a 30-year duration).
+- Fix: metric values containing two `$` amounts (e.g., "$761K → $0") rendered as LaTeX; `stat()` now escapes metric values.
+
 ## 0.2.0 (2026-10-11): methodology and UX fixes from Perplexity Computer's review (Claude)
 - **Stress test redesigned:** the recommendation is always built from the base frontier. Stress re-runs the simulation with 2022–26 correlations and a replay of 2022 in the first year of retirement, and reports base vs. stress success. Default persona: 69% → 45%.
 - **Inflation risk:** an AR(1) inflation process with asset pass-through; the optimizer now uses a real-return covariance. TIPS enter the frontier naturally.

@@ -62,7 +62,7 @@ def glide_path_area(a: Assumptions, ages: np.ndarray, W: np.ndarray, retire_age:
     return fig
 
 
-def fan_chart(ages: np.ndarray, pct: dict, retire_age: int, title: str) -> go.Figure:
+def fan_chart(ages: np.ndarray, pct: dict, retire_age: int, title: str, y_max: float | None = None) -> go.Figure:
     def band(lo, hi, name, alpha):
         return [go.Scatter(x=ages, y=pct[hi], line=dict(width=0), showlegend=False, hoverinfo="skip"),
                 go.Scatter(x=ages, y=pct[lo], fill="tonexty", line=dict(width=0), name=name,
@@ -77,6 +77,8 @@ def fan_chart(ages: np.ndarray, pct: dict, retire_age: int, title: str) -> go.Fi
                        font=dict(size=11, color=INK2), yanchor="bottom")
     _layout(fig, title, height=440, legend=dict(orientation="h", y=-0.12, x=0, yanchor="top"))
     fig.update_yaxes(tickprefix="$", tickformat="~s", rangemode="tozero")
+    if y_max is not None:
+        fig.update_yaxes(range=[0, y_max])
     return fig
 
 
