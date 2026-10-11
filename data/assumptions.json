@@ -1,0 +1,179 @@
+{
+ "as_of": "2026-10-09",
+ "inflation": 2.35,
+ "inflation_note": "10-yr breakeven 2.33% and 5y5y forward 2.32% (FRED T10YIE, T5YIFR, Oct 9 2026)",
+ "classes": [
+  {
+   "key": "US_EQ",
+   "name": "U.S. Stocks",
+   "etf": "VTI / ITOT",
+   "exp_return": 5.31,
+   "vol": 16.01,
+   "method": "Grinold-Kroner: dividend yield 1.04% + net buybacks 1.35% + real EPS growth 1.80% + inflation 2.35% - valuation drift 1.23%/yr (CAPE 41.9 -> 37 over 10 yrs)"
+  },
+  {
+   "key": "INTL_DEV",
+   "name": "International Developed Stocks",
+   "etf": "VEA / IEFA",
+   "exp_return": 6.64,
+   "vol": 17.45,
+   "method": "Grinold-Kroner: dividend yield 3.09% + net buybacks 0.50% + real growth 1.20% + inflation 2.35% - valuation drift 0.50%"
+  },
+  {
+   "key": "EM_EQ",
+   "name": "Emerging Market Stocks",
+   "etf": "VWO / IEMG",
+   "exp_return": 5.51,
+   "vol": 22.74,
+   "method": "Grinold-Kroner: dividend yield 1.66% - net issuance 1.00% + real growth 3.00% + inflation 2.35% - valuation drift 0.50%"
+  },
+  {
+   "key": "US_BOND",
+   "name": "U.S. Core Bonds",
+   "etf": "BND / AGG",
+   "exp_return": 5.3,
+   "vol": 5.38,
+   "method": "Starting yield: 60% Treasuries (5.00%) / 40% investment-grade corporates (5.74% after expected credit losses)"
+  },
+  {
+   "key": "TIPS",
+   "name": "U.S. TIPS",
+   "etf": "SCHP / TIP",
+   "exp_return": 5.22,
+   "vol": 5.88,
+   "method": "10-yr TIPS real yield 2.87% + expected inflation 2.35%"
+  },
+  {
+   "key": "CASH",
+   "name": "Cash / T-Bills",
+   "etf": "SGOV / BIL",
+   "exp_return": 3.9,
+   "vol": 1.05,
+   "method": "3-month T-bill 4.25% fading halfway toward a 3.5% long-run rate"
+  }
+ ],
+ "corr": [
+  [
+   1.0,
+   0.8361,
+   0.68,
+   0.216,
+   0.207,
+   -0.0131
+  ],
+  [
+   0.8361,
+   1.0,
+   0.77,
+   0.2633,
+   0.2486,
+   0.0019
+  ],
+  [
+   0.68,
+   0.77,
+   1.0,
+   0.3,
+   0.23,
+   0.0
+  ],
+  [
+   0.216,
+   0.2633,
+   0.3,
+   1.0,
+   0.7375,
+   0.1421
+  ],
+  [
+   0.207,
+   0.2486,
+   0.23,
+   0.7375,
+   1.0,
+   0.1272
+  ],
+  [
+   -0.0131,
+   0.0019,
+   0.0,
+   0.1421,
+   0.1272,
+   1.0
+  ]
+ ],
+ "corr_stress": [
+  [
+   1.0,
+   0.8361,
+   0.68,
+   0.6329,
+   0.6922,
+   -0.0131
+  ],
+  [
+   0.8361,
+   1.0,
+   0.77,
+   0.7777,
+   0.7555,
+   0.0019
+  ],
+  [
+   0.68,
+   0.77,
+   1.0,
+   0.7777,
+   0.7555,
+   0.0
+  ],
+  [
+   0.6329,
+   0.7777,
+   0.7777,
+   1.0,
+   0.7375,
+   0.1421
+  ],
+  [
+   0.6922,
+   0.7555,
+   0.7555,
+   0.7375,
+   1.0,
+   0.1272
+  ],
+  [
+   -0.0131,
+   0.0019,
+   0.0,
+   0.1421,
+   0.1272,
+   1.0
+  ]
+ ],
+ "corr_note": "Base: 50/50 blend of historical monthly correlations (Sep 2000-Sep 2026; VTSMX, VGTSX, VFITX/VFICX, VIPSX, T-bills) and the Horizon Actuarial 2026 survey average (43 advisors); EM pairs use the survey only. Stress: stock/bond and stock/TIPS correlations replaced with their 2022-26 values.",
+ "vol_note": "Average of historical (2000-2026 proxy) and forward-looking (Horizon 2026 survey) volatility; EM uses the survey only.",
+ "vol_hist": {
+  "US_EQ": 15.59,
+  "INTL_DEV": 16.88,
+  "US_BOND": 4.74,
+  "TIPS": 5.71,
+  "CASH": 0.54
+ },
+ "vol_fwd": {
+  "US_EQ": 16.43,
+  "INTL_DEV": 18.02,
+  "EM_EQ": 22.74,
+  "US_BOND": 6.03,
+  "TIPS": 6.05,
+  "CASH": 1.56
+ },
+ "sources": [
+  "MSFO 6831 Unit 3 capital market assumptions (Q1) and risk model (Q2-Q3)",
+  "U.S. Treasury yield curve and FRED series as of Oct 8-9, 2026",
+  "multpl.com CAPE 41.87 and dividend yield 1.04% (Oct 9, 2026); iShares EFA/EEM fund data",
+  "Horizon Actuarial Services, Survey of Capital Market Assumptions, 2026 Edition",
+  "Yahoo Finance monthly total returns, Sep 2000 - Sep 2026"
+ ]
+}
