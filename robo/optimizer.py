@@ -1,4 +1,4 @@
-"""Mean-variance efficient frontier with guardrails.
+"""Mean-variance efficient frontier with guardrails, in real (after-inflation) terms.
 
 Lesson from the MCERS analysis (Q5): unconstrained mean-variance optimization amplifies small
 errors in expected returns into extreme, unstable weights. The robo therefore optimizes only
@@ -47,21 +47,21 @@ def _start(a: Assumptions) -> np.ndarray:
 
 
 def min_variance(a: Assumptions, stress: bool = False) -> np.ndarray:
-    S = a.cov(stress)
+    S = a.cov_real(stress)
     r = minimize(lambda w: w @ S @ w, _start(a), jac=lambda w: 2 * S @ w, method="SLSQP",
                  bounds=_bounds(a), constraints=_constraints(a), options={"ftol": 1e-12, "maxiter": 500})
     return _clean(r.x)
 
 
 def max_return(a: Assumptions) -> np.ndarray:
-    mu = a.arith()
+    mu = a.real_arith()
     r = minimize(lambda w: -(w @ mu), _start(a), jac=lambda w: -mu, method="SLSQP",
                  bounds=_bounds(a), constraints=_constraints(a), options={"ftol": 1e-12, "maxiter": 500})
     return _clean(r.x)
 
 
 def max_return_at_vol(a: Assumptions, sigma: float, stress: bool = False, x0=None) -> np.ndarray:
-    S, mu = a.cov(stress), a.arith()
+    S, mu = a.cov_real(stress), a.real_arith()
     cons = _constraints(a) + [{"type": "ineq", "fun": lambda w: sigma**2 - w @ S @ w,
                                "jac": lambda w: -2 * S @ w}]
     r = minimize(lambda w: -(w @ mu), _start(a) if x0 is None else x0, jac=lambda w: -mu,
@@ -77,10 +77,10 @@ def _clean(w: np.ndarray) -> np.ndarray:
 
 @dataclass(frozen=True)
 class Frontier:
-    sigmas: np.ndarray     # realized volatility of each frontier portfolio
+    sigmas: np.ndarray     # real (after-inflation) volatility of each frontier portfolio
     weights: np.ndarray    # (n_points, n_assets)
-    arith: np.ndarray
-    geo: np.ndarray
+    arith: np.ndarray      # real arithmetic expected return
+    geo: np.ndarray        # NOMINAL expected compound return (real compound + inflation), for display
 
     @property
     def sigma_min(self) -> float:
@@ -105,7 +105,7 @@ class Frontier:
 
 def frontier(a: Assumptions, n: int = 41, stress: bool = False) -> Frontier:
     w_lo, w_hi = min_variance(a, stress), max_return(a)
-    S = a.cov(stress)
+    S = a.cov_real(stress)
     s_lo, s_hi = float(np.sqrt(w_lo @ S @ w_lo)), float(np.sqrt(w_hi @ S @ w_hi))
     W, x0 = [w_lo], w_lo
     for s in np.linspace(s_lo, s_hi, n)[1:-1]:
@@ -116,5 +116,6 @@ def frontier(a: Assumptions, n: int = 41, stress: bool = False) -> Frontier:
     sig = np.sqrt(np.einsum("ij,jk,ik->i", W, S, W))
     order = np.argsort(sig)
     W, sig = W[order], sig[order]
-    ar = W @ a.arith()
-    return Frontier(sigmas=sig, weights=W, arith=ar, geo=ar - sig**2 / 2)
+    ar = W @ a.real_arith()
+    geo = (1 + ar - sig**2 / 2) * (1 + a.inflation) - 1
+    return Frontier(sigmas=sig, weights=W, arith=ar, geo=geo)

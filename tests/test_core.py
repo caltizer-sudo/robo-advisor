@@ -18,6 +18,11 @@ def test_assumptions_valid(model):
         assert np.allclose(c, c.T) and np.linalg.eigvalsh(c).min() > 0
     # arithmetic = compound + variance / 2
     assert np.allclose(a.arith() - a.geo, a.vol**2 / 2)
+    # inflation risk: TIPS (full pass-through) are the only asset whose real risk adds nothing
+    cr = a.cov_real()
+    assert np.allclose(cr, cr.T) and np.linalg.eigvalsh(cr).min() > 0
+    t = a.idx("TIPS")
+    assert cr[t, t] == pytest.approx((a.vol[t] / (1 + a.inflation)) ** 2)
 
 
 def test_frontier_guardrails(model):
@@ -64,9 +69,12 @@ def test_survival_decreasing():
 def test_glide_path_derisks(model):
     a, fr = model
     p = planner.Profile()
-    _, scores, W = planner.glide_path(p, willingness=80, fr=fr)
+    _, scores, W = planner.glide_path(p, willingness=80, fr=fr, a=a)
     eq = W[:, :3].sum(1)
-    assert eq[0] > eq[p.retire_age - p.age] and scores[0] >= scores[-1]
+    r = p.retire_age - p.age
+    assert eq[0] > eq[r] > eq[-1]                      # keeps de-risking through retirement
+    assert np.all(np.diff(eq) <= 1e-9)                 # never re-risks with age
+    assert eq[r] <= 0.55 and eq[-1] <= 0.40            # in line with target-date practice
 
 
 def test_zero_volatility_matches_closed_form():
@@ -86,9 +94,40 @@ def test_zero_volatility_matches_closed_form():
 def test_solvers_consistent(model):
     a, fr = model
     p = planner.Profile()
-    _, _, W = planner.glide_path(p, 80, fr)
+    _, _, W = planner.glide_path(p, 80, fr, a)
     R = planner.asset_returns(a, p.years, paths=500)
     s = planner.required_savings_rate(p, W, R, 0.85)
     assert s is not None
     hit = planner.simulate(replace(p, savings_rate=s, later_savings_rate=s), W, R).success
     assert hit >= 0.85
+
+
+def test_tips_floor(model):
+    a, fr = model
+    p = planner.Profile()
+    _, _, W = planner.glide_path(p, 80, fr, a)
+    b, t = a.idx("US_BOND"), a.idx("TIPS")
+    share = W[:, t] / (W[:, b] + W[:, t])
+    assert share.min() >= planner.TIPS_FLOOR_EARLY - 1e-9
+    assert np.all(share[p.retire_age - p.age:] >= planner.TIPS_FLOOR_RETIRED - 1e-9)
+
+
+def test_stress_keeps_portfolio_and_lowers_success(model):
+    """The stress test re-runs the simulation only; it must never change the recommendation."""
+    a, fr = model
+    p = planner.Profile()
+    _, _, W = planner.glide_path(p, 80, fr, a)
+    base = planner.simulate(p, W, planner.asset_returns(a, p.years, paths=1000))
+    R = planner.asset_returns(a, p.years, paths=1000, stress=True, replay_at=p.retire_age - p.age)
+    assert np.allclose(R[:, p.retire_age - p.age, :], a.replay_2022)
+    stressed = planner.simulate(p, W, R)
+    assert stressed.success < base.success
+
+
+def test_inflation_hits_nominal_bonds_not_tips(model):
+    a, _ = model
+    R = planner.asset_returns(a, 40, paths=4000)
+    b, t = a.idx("US_BOND"), a.idx("TIPS")
+    # same nominal volatility class, but bonds carry inflation risk in real terms
+    assert R[:, :, b].std() > (a.vol[b] / (1 + a.inflation))
+    assert R[:, :, t].std() == pytest.approx(a.vol[t] / (1 + a.inflation), rel=0.05)

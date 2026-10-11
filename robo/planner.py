@@ -110,9 +110,47 @@ class Profile:
 
 
 # ------------------------------------------------------------------ glide path
+TIPS_FLOOR_EARLY, TIPS_FLOOR_RETIRED, TIPS_RAMP_YEARS = 0.15, 0.40, 15
+
+
+def spending_need(p: Profile) -> float:
+    """Annual retirement spending goal in today's dollars."""
+    if p.spending_mode != "replacement":
+        return p.fixed_spending
+    final_income = p.income * (1 + p.income_growth) ** max(p.retire_age - p.age - 1, 0)
+    return p.replacement * final_income
+
+
+def guaranteed_share(p: Profile) -> float:
+    need = spending_need(p)
+    return 1.0 if need <= 0 else min(p.social_security() / need, 1.0)
+
+
 def capacity_at(p: Profile, age: int) -> float:
     return risk.capacity_score(p.retire_age - age, p.plan_age - max(age, p.retire_age),
-                               p.income_stability, p.emergency_fund, p.dependents_at(age))
+                               p.income_stability, p.emergency_fund, p.dependents_at(age), guaranteed_share(p))
+
+
+def tips_floor(years_to_retirement: float) -> float:
+    """Minimum TIPS share of the bond sleeve: 15% early in a career, rising linearly over the last
+    15 working years to 40% in retirement, when spending must keep pace with inflation."""
+    if years_to_retirement >= TIPS_RAMP_YEARS:
+        return TIPS_FLOOR_EARLY
+    if years_to_retirement <= 0:
+        return TIPS_FLOOR_RETIRED
+    f = 1 - years_to_retirement / TIPS_RAMP_YEARS
+    return TIPS_FLOOR_EARLY + f * (TIPS_FLOOR_RETIRED - TIPS_FLOOR_EARLY)
+
+
+def apply_tips_floor(w: np.ndarray, a: Assumptions, floor: float) -> np.ndarray:
+    b, t = a.idx("US_BOND"), a.idx("TIPS")
+    sleeve = w[b] + w[t]
+    if sleeve <= 0 or w[t] >= floor * sleeve:
+        return w
+    w = w.copy()
+    w[t] = floor * sleeve
+    w[b] = sleeve - w[t]
+    return w
 
 
 def sigma_range(fr: Frontier) -> tuple[float, float]:
@@ -123,12 +161,14 @@ def sigma_range(fr: Frontier) -> tuple[float, float]:
     return fr.sigma_min, float(fr.sigmas[j])
 
 
-def glide_path(p: Profile, willingness: float, fr: Frontier) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Return (ages, combined scores, weights[len(ages), n_assets]) from today to plan_age - 1."""
+def glide_path(p: Profile, willingness: float, fr: Frontier, a: Assumptions) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Return (ages, combined scores, weights[len(ages), n_assets]) from today to plan_age - 1.
+    Weights always come from the BASE frontier; stress tests never change the recommendation."""
     lo, hi = sigma_range(fr)
     ages = np.arange(p.age, p.plan_age)
-    scores = np.array([risk.combined_score(capacity_at(p, int(a)), willingness) for a in ages])
-    W = np.array([fr.at_sigma(risk.target_sigma(s, lo, hi)) for s in scores])
+    scores = np.array([risk.combined_score(capacity_at(p, int(x)), willingness) for x in ages])
+    W = np.array([apply_tips_floor(fr.at_sigma(risk.target_sigma(sc, lo, hi)), a, tips_floor(p.retire_age - x))
+                  for sc, x in zip(scores, ages)])
     return ages, scores, W
 
 
@@ -141,8 +181,7 @@ def cash_flows(p: Profile) -> dict[str, np.ndarray]:
     income = p.income * (1 + p.income_growth) ** np.arange(T) * working
     rate = np.where(ages < p.later_from_age, p.savings_rate, p.later_savings_rate)
     contrib = income * (rate + p.employer_match)
-    final_income = p.income * (1 + p.income_growth) ** max(p.retire_age - p.age - 1, 0)
-    need = p.replacement * final_income if p.spending_mode == "replacement" else p.fixed_spending
+    need = spending_need(p)
     spending = np.where(ages >= p.retire_age, need, 0.0)
     ss = np.where(ages >= p.ss_claim_age, p.social_security(), 0.0)
     withdraw = np.where(ages >= p.retire_age, np.maximum(spending - ss, 0.0), 0.0)
@@ -162,15 +201,35 @@ def _shocks(paths: int, years: int, n: int, seed: int) -> np.ndarray:
     return np.random.default_rng(seed).standard_normal((paths, years, n))
 
 
-def asset_returns(a: Assumptions, years: int, paths: int = 2000, stress: bool = False, seed: int = 7) -> np.ndarray:
-    """Real annual asset returns, shape (paths, years, n_assets)."""
-    mu = (1 + a.arith()) / (1 + a.inflation) - 1
+def asset_returns(a: Assumptions, years: int, paths: int = 2000, stress: bool = False, seed: int = 7,
+                  replay_at: int | None = None) -> np.ndarray:
+    """Real annual asset returns, shape (paths, years, n_assets).
+
+    1. Correlated lognormal draws matched to each asset's real arithmetic mean and (deflated) volatility.
+    2. Inflation surprises follow an AR(1) process; each asset's real return falls by
+       (1 - pass-through) x surprise, so nominal bonds and stocks lose in inflation shocks and TIPS don't.
+    3. Optional stress replay: year `replay_at` repeats 2022 (real returns of every asset class), and
+       the 2022 inflation surprise then decays at the AR(1) rate in later years.
+    """
+    mu = a.real_arith()
     sd = a.vol / (1 + a.inflation)
     s2 = np.log(1 + sd**2 / (1 + mu) ** 2)
     m = np.log(1 + mu) - s2 / 2
     L = np.linalg.cholesky(a.corr_stress if stress else a.corr)
-    z = _shocks(paths, years, a.n, seed) @ L.T
-    return np.exp(m + np.sqrt(s2) * z) - 1
+    raw = _shocks(paths, years, a.n + 1, seed)
+    z = raw[:, :, : a.n] @ L.T
+    R = np.exp(m + np.sqrt(s2) * z) - 1
+    if a.infl_vol > 0:
+        phi = a.infl_persistence
+        e = raw[:, :, a.n] * a.infl_vol * np.sqrt(1 - phi**2)
+        u = np.empty((paths, years))
+        u[:, 0] = a.replay_surprise if replay_at == 0 else raw[:, 0, a.n] * a.infl_vol  # stationary start
+        for t in range(1, years):
+            u[:, t] = a.replay_surprise if t == replay_at else phi * u[:, t - 1] + e[:, t]
+        R = R - u[:, :, None] * (1 - a.pass_through)[None, None, :]
+    if replay_at is not None and 0 <= replay_at < years:
+        R[:, replay_at, :] = a.replay_2022
+    return R
 
 
 @dataclass
@@ -242,10 +301,10 @@ def sustainable_spending(p: Profile, W, R, target=0.85) -> float | None:
     return _bisect(f, 0.0, hi, target, increasing=False)
 
 
-def retirement_age_needed(p: Profile, willingness: float, fr: Frontier, R, target=0.85, max_age=75) -> int | None:
+def retirement_age_needed(p: Profile, willingness: float, fr: Frontier, a: Assumptions, R, target=0.85, max_age=75) -> int | None:
     for ra in range(p.retire_age, max_age + 1):
         q = replace(p, retire_age=ra)
-        _, _, W = glide_path(q, willingness, fr)
+        _, _, W = glide_path(q, willingness, fr, a)
         if simulate(q, W, R).success >= target:
             return ra
     return None

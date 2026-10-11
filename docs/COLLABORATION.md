@@ -16,6 +16,8 @@ This repo is developed iteratively by Connor, Claude (Anthropic) and Perplexity 
 - Correlation matrices are symmetric and positive definite.
 - `simulate()` with zero volatility matches a hand-computed closed form (`test_zero_volatility_matches_closed_form`).
 - The recommended risk never exceeds the highest-compound-return portfolio (`planner.sigma_range`).
+- **The stress test never changes the recommendation.** Weights always come from the base frontier (`test_stress_keeps_portfolio_and_lowers_success`).
+- The glide path never re-risks with age, and the TIPS share of bonds respects `planner.tips_floor` (`test_tips_floor`).
 - Every dollar amount in the simulation is in real (today's) dollars.
 - Each asset class keeps its color in every chart (`charts.ASSET_COLORS`, a validated categorical order). Don't recolor by rank.
 - Any text containing `$` passed to `st.markdown`, a radio or a checkbox label must go through `md()` in `app.py`, or Streamlit renders it as LaTeX.
@@ -40,6 +42,6 @@ State the **goal**, the **files touched**, and the **tests added or updated**. I
 ## Release checklist (before the live session)
 
 - [ ] `pytest -q` passes; the app loads with no errors in any tab.
-- [ ] The default persona shows a Growth portfolio (about 72% stocks), a success probability, and three advice levers.
-- [ ] The stress toggle and the Social Security cut checkbox both change the results.
+- [ ] The default persona shows about 70% stocks (49% at 67), plan success of about 69%, and three advice levers on the Recommendation tab.
+- [ ] The stress toggle leaves the allocation unchanged and lowers success (about 69% → 45%). The Social Security cut checkbox also changes the results.
 - [ ] Open the Streamlit Cloud link 5 minutes before presenting so it wakes up.

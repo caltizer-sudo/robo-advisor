@@ -12,6 +12,8 @@ ASSET_COLORS = {"US_EQ": "#2a78d6", "INTL_DEV": "#eb6834", "EM_EQ": "#1baf7a",
                 "US_BOND": "#eda100", "TIPS": "#e87ba4", "CASH": "#008300"}
 INK, INK2, GRID = "#0b0b0b", "#52514e", "#e4e3df"
 BLUE = "#2a78d6"
+# Vanguard Target Retirement glide path reference points: (age, % stocks); 30% from 7 years after a 65 target date
+VANGUARD_TDF = ((25, 90), (65, 50), (72, 30))
 FONT = dict(family="Inter, -apple-system, Segoe UI, Helvetica, Arial, sans-serif", size=13, color=INK)
 
 
@@ -48,6 +50,12 @@ def glide_path_area(a: Assumptions, ages: np.ndarray, W: np.ndarray, retire_age:
     fig.add_vline(x=retire_age, line=dict(color=INK2, width=1, dash="dot"))
     fig.add_annotation(x=retire_age, y=102, text="Retirement", showarrow=False, font=dict(size=11, color=INK2), yanchor="bottom")
     fig.add_vline(x=now_age, line=dict(color=INK, width=1))
+    ref = [(x, y) for x, y in VANGUARD_TDF if ages[0] <= x <= ages[-1]]
+    if ref:
+        fig.add_trace(go.Scatter(x=[x for x, _ in ref], y=[y for _, y in ref], mode="markers",
+                                 name="Vanguard target-date stock share", marker=dict(color=INK, size=9,
+                                 line=dict(color="white", width=1.5)),
+                                 hovertemplate="Vanguard target-date fund: %{y:.0f}% stocks at %{x}<extra></extra>"))
     _layout(fig, "How your allocation changes with age", height=420, hovermode="x unified",
             legend=dict(orientation="h", y=-0.22, x=0))
     fig.update_yaxes(range=[0, 108], ticksuffix="%", title=None)
@@ -72,20 +80,20 @@ def fan_chart(ages: np.ndarray, pct: dict, retire_age: int, title: str) -> go.Fi
     return fig
 
 
-def frontier_chart(a: Assumptions, fr: Frontier, points: dict[str, np.ndarray], stress: bool = False) -> go.Figure:
+def frontier_chart(a: Assumptions, fr: Frontier, points: dict[str, np.ndarray]) -> go.Figure:
     fig = go.Figure(go.Scatter(x=fr.sigmas * 100, y=fr.geo * 100, mode="lines", name="Efficient frontier (with guardrails)",
                                line=dict(color=BLUE, width=2.5),
                                hovertemplate="Risk %{x:.1f}%<br>Compound return %{y:.2f}%<extra></extra>"))
     symbols = ["circle", "diamond", "square", "triangle-up"]
     colors = [INK, "#eb6834", "#1baf7a", "#6250d6"]
     for i, (name, w) in enumerate(points.items()):
-        s = a.portfolio_stats(w, stress)
+        s = a.portfolio_stats(w)
         fig.add_trace(go.Scatter(x=[s["vol"] * 100], y=[s["geo"] * 100], mode="markers", name=name,
                                  marker=dict(size=13, symbol=symbols[i % 4], color=colors[i % 4], line=dict(color="white", width=1.5)),
                                  hovertemplate=f"<b>{name}</b><br>Risk %{{x:.1f}}%<br>Compound return %{{y:.2f}}%<extra></extra>"))
     _layout(fig, "Risk vs. expected compound return", height=400,
             legend=dict(orientation="h", y=-0.25, x=0))
-    fig.update_xaxes(title="Volatility (σ)", ticksuffix="%", showgrid=True, gridcolor=GRID)
+    fig.update_xaxes(title="Volatility after inflation (σ)", ticksuffix="%", showgrid=True, gridcolor=GRID)
     fig.update_yaxes(title="Compound return", ticksuffix="%", title_standoff=6)
     return fig
 

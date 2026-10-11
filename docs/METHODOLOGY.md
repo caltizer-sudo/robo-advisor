@@ -14,25 +14,46 @@ Expected returns are 10-year nominal **compound** returns, built from market pri
 | Cash / T-bills | 3.90% | 1.1% | 3-month bill 4.25%, fading halfway toward a 3.5% long-run rate |
 
 - **Inflation:** 2.35%, from the 10-year breakeven (2.33%) and the 5-year, 5-year-forward rate (2.32%).
-- **Arithmetic means** (used by the optimizer and the simulation): μ_arith ≈ μ_compound + σ²/2.
+- **Arithmetic means** (used by the optimizer and the simulation): μ_arith ≈ μ_compound + σ²/2. Real means: (1 + μ_arith) / (1 + π) − 1.
 - **Volatilities:** the average of historical volatility (Sep 2000–Sep 2026, public index funds) and forward-looking survey volatility. Emerging markets uses the survey only.
 - **Correlations:** a 50/50 blend of historical monthly correlations and the Horizon Actuarial 2026 survey average of 43 investment advisors. The **stress** matrix replaces the stock/bond and stock/TIPS correlations with their 2022–26 values (about +0.6 to +0.8), a period when stocks and bonds fell together.
 
-## 2. Risk profile (`robo/risk.py`)
+## 2. Inflation risk and TIPS
+
+The planner works in real (today's) dollars, so inflation surprises are a risk, not a constant.
+
+- **Inflation process:** annual surprises follow an AR(1) process with persistence 0.6 and long-run volatility 1.95% (Horizon 2026 survey).
+- **Pass-through:** the share of a surprise each asset's nominal return absorbs within the year. TIPS 100% (principal indexed to CPI), T-bills 70% (yields reset quickly), stocks and nominal bonds 0% in the short run.
+- **Real covariance used by the optimizer:** Σ_real = Σ_nominal / (1 + π)² + σ_π² × (1 − pass-through)(1 − pass-through)ᵀ. TIPS are the only full inflation hedge, so they now earn a place on the frontier: 15–31% of the portfolio at low-to-moderate risk.
+- **TIPS floor:** a policy floor on the TIPS share of the bond sleeve: 15% when retirement is 15 or more years away, rising linearly to 40% at retirement and staying there. Retirement spending is a real liability, and TIPS are its natural hedge.
+- **Why this changed in v0.2:** in v0.1, inflation was fixed. TIPS (5.22%, 5.9% volatility) then looked strictly dominated by core bonds (5.30%, 5.4%) and always got 0%.
+
+## 3. Risk profile (`robo/risk.py`)
 
 | Score | Components (weights) |
 |---|---|
-| Capacity, 0–100 | Horizon (50%): 70% from years until withdrawals start (full credit at 25+), 30% from years of withdrawals (full credit at 30+). Income stability (20%), emergency fund (15%), dependents (15%) |
+| Capacity, working years | Horizon (50%), income stability (20%), emergency fund (15%), dependents (15%) |
+| Capacity, retirement | Horizon (60%) and the share of spending covered by guaranteed income, i.e. Social Security (40%) |
 | Willingness, 0–100 | Knowledge (10%), objective (20%), reaction to a 25% crash (25%), choice among five one-year outcome ranges taken from the actual frontier (30%), maximum tolerable loss (15%) |
 | Combined | lower + 0.25 × (higher − lower) |
 
-- **How the combined score is used:** it maps onto the frontier's volatility range: σ = σ_min + (score/100)^0.7 × (σ_cap − σ_min).
-- **Why the cap:** σ_cap is the portfolio with the **highest expected compound return**. Beyond it, extra risk lowers expected growth, because volatility drag rises faster than the extra average return. With today's assumptions the cap is about 81% stocks.
-- **Why the conservative combination rule:** a client who *wants* risk but cannot *afford* it shouldn't get it; a client who can afford risk but would panic-sell shouldn't either.
+- **Horizon** works like the duration of the remaining goal: (years until withdrawals start) + (years of withdrawals) / 2, with full credit at 30 years. It keeps falling throughout retirement.
+- **Transition:** working-life capacity blends linearly into retirement capacity over the final 10 working years. This avoids a jump at the retirement date.
+- **Mapping:** the combined score maps **linearly** onto the frontier's volatility range: σ = σ_min + score/100 × (σ_cap − σ_min).
+- **The cap:** σ_cap is the portfolio with the highest expected compound return, about 83% stocks today. Beyond it, extra risk lowers expected growth.
+- **Resulting glide paths** (stock share at ages 30 / 67 / 80 / 90):
 
-## 3. Optimization (`robo/optimizer.py`)
+  | Willingness | 30 | 67 | 80 | 90 |
+  |---|---|---|---|---|
+  | High (78) | 70% | 49% | 42% | 35% |
+  | Average (50) | 54% | 44% | 36% | 29% |
+  | Low (25) | 40% | 29% | 26% | 22% |
 
-The frontier maximizes w·μ subject to w Σ wᵀ ≤ σ², at 41 volatility levels, with these guardrails:
+  For comparison, Vanguard's target-date path is 90% stocks at 25, 50% at 65 and 30% from 72; its reference points appear on the app's glide-path chart. Our young-investor equity is lower because the robo honors stated willingness, and because the frontier is flat at today's valuations.
+
+## 4. Optimization (`robo/optimizer.py`)
+
+The frontier maximizes real expected return w·μ subject to w Σ_real wᵀ ≤ σ², at 41 volatility levels, with these guardrails:
 
 - U.S. stocks ≥ 50% of the stock portion
 - International developed ≤ 35% of the stock portion
@@ -43,18 +64,17 @@ The frontier maximizes w·μ subject to w Σ wᵀ ≤ σ², at 41 volatility lev
 
 The guardrails exist because unconstrained mean-variance optimization amplifies small errors in the inputs. In the MCERS pension analysis (Q5), a 0.5-point change in expected returns moved the private-equity weight from 25% to 51%.
 
-## 4. Glide path (`robo/planner.py::glide_path`)
+## 5. Monte Carlo and the stress test (`robo/planner.py`)
 
-Each year, capacity is recomputed with the remaining time horizon and the number of dependents still in or before college. Willingness answers stay fixed. The resulting combined score sets that year's target volatility and weights.
-
-## 5. Monte Carlo (`robo/planner.py::simulate`)
-
-- **Units:** everything is in real (today's) dollars.
-- **Returns:** correlated lognormal draws for each asset class each year (2,000 paths), matched to the real arithmetic means and volatilities. The portfolio is rebalanced annually to the glide-path weights, minus the all-in fee.
-- **Cash flows:** contributions are (savings rate + employer match) × income, with income growing at the chosen real rate. College costs and retirement withdrawals (spending minus Social Security) come out at the start of each year; contributions go in at the end.
+- **Base case:** each year, draw correlated lognormal real returns matched to the real arithmetic means and deflated volatilities. Subtract (1 − pass-through) × the inflation surprise. Rebalance to that year's glide-path weights and deduct fees. 2,000 paths, real dollars.
+- **Cash flows:** contributions go in at year end; college costs and retirement withdrawals (spending minus Social Security) come out at the start of the year.
 - **Success:** spending is fully funded every year through the plan-to age.
-- **Chance of outliving your money:** the probability of running out, weighting each scenario by the chance of being alive at the age the money runs out.
-- **Advice solvers:** bisection on the same scenarios (common random numbers) finds the savings rate, the spending level and the retirement age that reach 85% success.
+- **Advice solvers:** bisection on common random numbers finds the savings rate, spending level and retirement age that reach 85% success.
+- **Stress test (v0.2 redesign):** the stress test **never changes the recommended portfolio.** It re-runs the same glide path with:
+  1. **2022–26 correlations:** stocks with bonds and TIPS at about +0.6 to +0.9.
+  2. **A replay of calendar 2022 in the first year of retirement**, when sequence risk is greatest. Real returns: U.S. stocks −24%, international −21%, core bonds −17%, TIPS −17%, cash −4%, with 6.4% CPI. The 2022 inflation surprise (+4.05 points) then decays at the AR(1) rate.
+- **What it reports:** base vs. stressed plan success and the change in points. For the default persona: 69% → 45%.
+- **Why it changed in v0.1 → v0.2:** v0.1 re-optimized the frontier on the stress matrix. Bonds lost their diversification value, so the same score mapped to *more* stocks (82% vs. 72%), which users would read as a bug.
 
 ## 6. Social Security and longevity
 

@@ -24,13 +24,16 @@ INCOME_STABILITY = {
 }
 EMERGENCY_FUND = {"None": 0, "Less than 3 months": 35, "3 to 6 months": 75, "More than 6 months": 100}
 CAPACITY_WEIGHTS = {"horizon": 0.50, "income": 0.20, "emergency": 0.15, "dependents": 0.15}
+RETIRED_WEIGHTS = {"horizon": 0.60, "guaranteed": 0.40}
+TRANSITION_YEARS = 10      # blend from working-life to retirement capacity over the last 10 years
+HORIZON_FULL = 30.0        # a 30-year spending horizon earns full horizon credit
 
 
 def horizon_score(years_to_retirement: float, years_in_retirement: float) -> float:
-    """0-100. 70% from time until withdrawals start, 30% from how long withdrawals last."""
-    until = min(max(years_to_retirement, 0.0) / 25.0, 1.0) * 100
-    during = min(max(years_in_retirement, 0.0) / 30.0, 1.0) * 100
-    return 0.7 * until + 0.3 * during
+    """0-100 from the 'duration' of the remaining goal: years until withdrawals start plus half
+    the years they last (the average time until each dollar is spent). Full credit at 30 years."""
+    duration = max(years_to_retirement, 0.0) + max(years_in_retirement, 0.0) / 2
+    return min(duration / HORIZON_FULL, 1.0) * 100
 
 
 def dependents_score(n: int) -> float:
@@ -38,14 +41,22 @@ def dependents_score(n: int) -> float:
 
 
 def capacity_score(years_to_retirement: float, years_in_retirement: float, income_stability: str,
-                   emergency_fund: str, dependents: int) -> float:
-    parts = {
-        "horizon": horizon_score(years_to_retirement, years_in_retirement),
+                   emergency_fund: str, dependents: int, guaranteed_share: float = 0.0) -> float:
+    """Working-life capacity blends into retirement capacity over the final TRANSITION_YEARS.
+
+    Working life: horizon, income stability, emergency fund, dependents.
+    Retirement: horizon and the share of spending covered by guaranteed income (Social Security),
+    because a paycheck no longer exists to absorb losses."""
+    horizon = horizon_score(years_to_retirement, years_in_retirement)
+    working = sum(CAPACITY_WEIGHTS[k] * v for k, v in {
+        "horizon": horizon,
         "income": INCOME_STABILITY[income_stability],
         "emergency": EMERGENCY_FUND[emergency_fund],
         "dependents": dependents_score(dependents),
-    }
-    return sum(CAPACITY_WEIGHTS[k] * v for k, v in parts.items())
+    }.items())
+    retired = RETIRED_WEIGHTS["horizon"] * horizon + RETIRED_WEIGHTS["guaranteed"] * min(max(guaranteed_share, 0.0), 1.0) * 100
+    w = min(max(1 - years_to_retirement / TRANSITION_YEARS, 0.0), 1.0)
+    return (1 - w) * working + w * retired
 
 
 # ---------------------------------------------------------------- willingness (subjective)
@@ -88,7 +99,7 @@ TOLERANCE = ((20, "Low"), (40, "Below average"), (60, "Average"), (80, "Above av
 # Portfolio names follow the stock-share bands Schwab uses, so the two robos compare like for like
 PORTFOLIOS = ((0.25, "Conservative"), (0.40, "Moderately Conservative"), (0.55, "Moderate"),
               (0.70, "Moderate Growth"), (0.85, "Growth"), (1.01, "Aggressive Growth"))
-MAPPING_EXPONENT = 0.7   # concave: moderate scores are not pushed too far toward the minimum-risk end
+MAPPING_EXPONENT = 1.0   # linear: keeps the spread between low, average and high scores
 
 
 def profile_label(score: float) -> str:

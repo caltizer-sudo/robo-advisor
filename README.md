@@ -19,7 +19,7 @@ Expected returns are **forward-looking** (built from yields and valuations as of
 python -m venv .venv && source .venv/bin/activate     # optional
 pip install -r requirements.txt
 streamlit run app.py                                   # opens http://localhost:8501
-pytest -q                                              # 8 unit tests
+pytest -q                                              # 11 unit tests
 ```
 
 ## Deploy (free) on Streamlit Community Cloud
@@ -39,7 +39,7 @@ robo/risk.py               questionnaire, capacity/willingness scoring, score ->
 robo/planner.py            glide path, Social Security, longevity, Monte Carlo, solvers
 robo/charts.py             Plotly figures (fixed asset-class colors)
 data/assumptions.json      capital market assumptions: single source of truth
-tests/test_core.py         unit tests (guardrails, scoring, SS formula, closed-form MC check)
+tests/test_core.py         unit tests (guardrails, scoring, SS formula, closed-form MC check, stress, TIPS, inflation)
 docs/METHODOLOGY.md        formulas, assumptions and sources
 docs/COLLABORATION.md      guide for AI agents and humans iterating on this repo
 ```

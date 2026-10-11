@@ -175,5 +175,30 @@
   "multpl.com CAPE 41.87 and dividend yield 1.04% (Oct 9, 2026); iShares EFA/EEM fund data",
   "Horizon Actuarial Services, Survey of Capital Market Assumptions, 2026 Edition",
   "Yahoo Finance monthly total returns, Sep 2000 - Sep 2026"
- ]
+ ],
+ "inflation_risk": {
+  "vol": 1.95,
+  "persistence": 0.6,
+  "pass_through": {
+   "US_EQ": 0.0,
+   "INTL_DEV": 0.0,
+   "EM_EQ": 0.0,
+   "US_BOND": 0.0,
+   "TIPS": 1.0,
+   "CASH": 0.7
+  },
+  "note": "Annual inflation surprises follow an AR(1) process (persistence 0.6) with 1.95% long-run volatility (Horizon 2026 survey). Pass-through = share of an inflation surprise an asset's nominal return absorbs within the year: TIPS 100% (principal indexed to CPI), T-bills 70% (yields reset quickly), stocks and nominal bonds 0% in the short run."
+ },
+ "replay_2022": {
+  "nominal": {
+   "US_EQ": -19.6,
+   "INTL_DEV": -16.07,
+   "EM_EQ": -16.07,
+   "US_BOND": -12.14,
+   "TIPS": -12.04,
+   "CASH": 1.81
+  },
+  "cpi": 6.4,
+  "note": "Calendar-2022 total returns of the proxy funds (VTSMX, VGTSX for both developed and emerging stocks, 50/50 VFITX/VFICX, VIPSX, 3-month T-bills) and Dec-2021 to Dec-2022 CPI-U inflation. Yahoo Finance and FRED."
+ }
 }
