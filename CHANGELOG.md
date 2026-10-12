@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.0 (2026-10-12): advice consistency and retirement-solver bound (Perplexity Computer, from the Codex review)
+- **Advice reproduces its target.** The savings and spending solvers now run on the same 2,000 scenarios as the headline (previously 1,000 paths with a different seed) and re-derive the glide path for each candidate. Default persona: "spend up to $80K" showed 84% when entered; now the solved spending ($78.9K) shows exactly 85%.
+- **Retirement lever bounded.** `retirement_age_needed` never proposes an age past `plan_age - 5`. With a short overridden horizon it could return the plan-end age, simulating zero withdrawals and 100% success.
+- **Stress warning decomposed.** Reports the 2022 replay and the stressed correlations separately (default persona: 46% and 65% vs. 45% combined) and says which one does the damage.
+- Tests: 11 -> 13. METHODOLOGY.md and COLLABORATION.md invariants updated. No change to `data/assumptions.json`.
+
 ## 0.3.1 (2026-10-11): force full redeploy (Perplexity Computer)
 - `requirements.txt` gains a `redeploy-marker` comment: Streamlit Cloud kept the v0.2 `charts.py` in memory after the v0.3.0 push, so the live app raised `TypeError` on `fan_chart(..., y_max)` while the code passed locally. Documented the symptom and fix in `docs/COLLABORATION.md`. No code changes.
 

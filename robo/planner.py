@@ -285,24 +285,44 @@ def _bisect(f, lo, hi, target, iters=18, increasing=True):
     return hi if increasing else lo
 
 
-def required_savings_rate(p: Profile, W, R, target=0.85) -> float | None:
+# The solvers must be evaluated on the *same* scenario set `R` as the headline success rate, and
+# `glide` (profile -> weights) lets them re-derive the glide path for each candidate profile, since
+# spending changes the guaranteed-income share and therefore retirement capacity. Otherwise the
+# advice can miss its own target when the user follows it (v0.4.0 fix).
+MIN_RETIREMENT_YEARS = 5
+
+
+def required_savings_rate(p: Profile, W, R, target=0.85, glide=None) -> float | None:
     """Constant employee savings rate (from today to retirement) that achieves `target` success."""
     def f(s):
-        return simulate(replace(p, savings_rate=s, later_savings_rate=s), W, R).success
+        q = replace(p, savings_rate=s, later_savings_rate=s)
+        return simulate(q, glide(q) if glide else W, R).success
     return _bisect(f, 0.0, 0.60, target, increasing=True)
 
 
-def sustainable_spending(p: Profile, W, R, target=0.85) -> float | None:
+def sustainable_spending(p: Profile, W, R, target=0.85, glide=None) -> float | None:
     """Retirement spending (today's dollars per year) that achieves `target` success."""
     hi = 4 * float(cash_flows(p)["need"]) + 50_000
 
     def f(x):
-        return simulate(replace(p, spending_mode="fixed", fixed_spending=x), W, R).success
+        q = replace(p, spending_mode="fixed", fixed_spending=x)
+        return simulate(q, glide(q) if glide else W, R).success
     return _bisect(f, 0.0, hi, target, increasing=False)
 
 
-def retirement_age_needed(p: Profile, willingness: float, fr: Frontier, a: Assumptions, R, target=0.85, max_age=75) -> int | None:
-    for ra in range(p.retire_age, max_age + 1):
+def last_retirement_age(p: Profile, max_age: int = 75, min_years: int = MIN_RETIREMENT_YEARS) -> int:
+    """Latest retirement age the solver may propose: it must leave `min_years` of withdrawals inside the plan."""
+    return min(max_age, p.plan_age - min_years)
+
+
+def retirement_age_needed(p: Profile, willingness: float, fr: Frontier, a: Assumptions, R, target=0.85,
+                          max_age=75, min_years=MIN_RETIREMENT_YEARS) -> int | None:
+    """Earliest retirement age (>= current plan) that reaches `target`, or None.
+
+    Bounded by `last_retirement_age`: a retirement age at or past the plan-to age would remove
+    withdrawals from the simulation and report success trivially.
+    """
+    for ra in range(p.retire_age, last_retirement_age(p, max_age, min_years) + 1):
         q = replace(p, retire_age=ra)
         _, _, W = glide_path(q, willingness, fr, a)
         if simulate(q, W, R).success >= target:

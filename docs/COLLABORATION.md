@@ -19,6 +19,7 @@ This repo is developed iteratively by Connor, Claude (Anthropic) and Perplexity 
 - **The stress test never changes the recommendation.** Weights always come from the base frontier (`test_stress_keeps_portfolio_and_lowers_success`).
 - The glide path never re-risks with age, and the TIPS share of bonds respects `planner.tips_floor` (`test_tips_floor`).
 - Every dollar amount in the simulation is in real (today's) dollars.
+- **Advice must reproduce its target.** The solvers run on the same scenario set as the headline success rate and re-derive the glide path per candidate (`test_advice_reproduces_target_on_same_scenarios`); the retirement lever stays at least `planner.MIN_RETIREMENT_YEARS` inside the plan horizon (`test_retirement_solver_stays_inside_plan_horizon`).
 - Each asset class keeps its color in every chart (`charts.ASSET_COLORS`, a validated categorical order). Don't recolor by rank.
 - Any text containing `$` passed to `st.markdown`, `st.metric` (values too), a radio or a checkbox label must go through `md()` in `app.py`, or Streamlit renders it as LaTeX. Use the `stat()` helper for metrics; it escapes automatically.
 

@@ -131,3 +131,40 @@ def test_inflation_hits_nominal_bonds_not_tips(model):
     # same nominal volatility class, but bonds carry inflation risk in real terms
     assert R[:, :, b].std() > (a.vol[b] / (1 + a.inflation))
     assert R[:, :, t].std() == pytest.approx(a.vol[t] / (1 + a.inflation), rel=0.05)
+
+
+def test_advice_reproduces_target_on_same_scenarios(model):
+    """Following the spending / savings advice must show the target success on the same scenario set
+    the headline uses, with the glide path re-derived for the changed profile (Codex review, v0.4.0)."""
+    a, fr = model
+    p = planner.Profile()
+    will = 80
+
+    def glide(q):
+        return planner.glide_path(q, will, fr, a)[2]
+
+    W = glide(p)
+    R = planner.asset_returns(a, p.years, paths=2000)
+    spend = planner.sustainable_spending(p, W, R, 0.85, glide=glide)
+    assert spend is not None
+    q = replace(p, spending_mode="fixed", fixed_spending=spend)
+    hit = planner.simulate(q, glide(q), R).success
+    assert 0.85 <= hit < 0.86
+    rate = planner.required_savings_rate(p, W, R, 0.85, glide=glide)
+    q = replace(p, savings_rate=rate, later_savings_rate=rate)
+    hit = planner.simulate(q, glide(q), R).success
+    assert 0.85 <= hit < 0.86
+
+
+def test_retirement_solver_stays_inside_plan_horizon(model):
+    """The retirement-age lever may never move retirement to (or past) the plan-to age, which would
+    remove withdrawals from the simulation and report success trivially (Codex review, v0.4.0)."""
+    a, fr = model
+    cases = [planner.Profile(age=60, retire_age=62, plan_age=66, savings=5_000, later_from_age=60, later_savings_rate=0.10),
+             planner.Profile(age=55, retire_age=60, plan_age=70, savings=100_000, later_from_age=55, later_savings_rate=0.10)]
+    for p in cases:
+        R = planner.asset_returns(a, p.years, paths=500)
+        ra = planner.retirement_age_needed(p, 80, fr, a, R, 0.85)
+        assert ra is None or ra <= p.plan_age - planner.MIN_RETIREMENT_YEARS
+        if ra is not None:
+            assert planner.cash_flows(replace(p, retire_age=ra))["withdraw"].sum() > 0

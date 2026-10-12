@@ -66,27 +66,41 @@ def model():
     return a, optimizer.frontier(a)
 
 
+N_PATHS = 2000  # one scenario set, shared by the headline success rate and the advice solvers
+
+
 @st.cache_data(show_spinner=False)
 def run_plan(profile: planner.Profile, willingness: float, stress: bool):
     a, fr = model()
     ages, scores, W = planner.glide_path(profile, willingness, fr, a)
-    base = planner.simulate(profile, W, planner.asset_returns(a, profile.years, paths=2000))
-    stressed = None
+    base = planner.simulate(profile, W, planner.asset_returns(a, profile.years, paths=N_PATHS))
+    stressed, parts = None, None
     if stress:
         replay = min(max(profile.retire_age - profile.age, 0), profile.years - 1)
-        R = planner.asset_returns(a, profile.years, paths=2000, stress=True, replay_at=replay)
+        R = planner.asset_returns(a, profile.years, paths=N_PATHS, stress=True, replay_at=replay)
         stressed = planner.simulate(profile, W, R)
-    return ages, scores, W, base, stressed
+        # the two ingredients on their own, so the warning can say which one does the damage
+        parts = {
+            "replay": planner.simulate(profile, W, planner.asset_returns(a, profile.years, paths=N_PATHS, replay_at=replay)).success,
+            "corr": planner.simulate(profile, W, planner.asset_returns(a, profile.years, paths=N_PATHS, stress=True)).success,
+        }
+    return ages, scores, W, base, stressed, parts
 
 
 @st.cache_data(show_spinner=False)
 def run_solvers(profile: planner.Profile, willingness: float):
+    """Advice levers, solved on the same scenarios the headline uses and with the glide path re-derived
+    for each candidate, so following the advice reproduces the target on screen."""
     a, fr = model()
     _, _, W = planner.glide_path(profile, willingness, fr, a)
-    R = planner.asset_returns(a, profile.years, paths=1000, seed=11)
+    R = planner.asset_returns(a, profile.years, paths=N_PATHS)
+
+    def glide(q: planner.Profile):
+        return planner.glide_path(q, willingness, fr, a)[2]
+
     return {
-        "savings_rate": planner.required_savings_rate(profile, W, R, TARGET_SUCCESS),
-        "spending": planner.sustainable_spending(profile, W, R, TARGET_SUCCESS),
+        "savings_rate": planner.required_savings_rate(profile, W, R, TARGET_SUCCESS, glide=glide),
+        "spending": planner.sustainable_spending(profile, W, R, TARGET_SUCCESS, glide=glide),
         "retire_age": planner.retirement_age_needed(profile, willingness, fr, a, R, TARGET_SUCCESS),
     }
 
@@ -233,7 +247,7 @@ with tab_risk:
 
 # ------------------------------------------------------------------ run the plan
 with st.spinner("Simulating 2,000 market scenarios..."):
-    ages, scores, W, res, res_stress = run_plan(profile, will, stress)
+    ages, scores, W, res, res_stress, stress_parts = run_plan(profile, will, stress)
     sol = run_solvers(profile, will)
 w_now = W[0]
 stats_now = a.portfolio_stats(w_now)
@@ -272,7 +286,10 @@ def levers_card() -> None:
         if sol["retire_age"] is not None:
             stat(c[2], "Retire at", f"{sol['retire_age']}", f"vs. {profile.retire_age} planned")
         else:
-            stat(c[2], "Retire at", "after 75", "Retiring later alone can't reach the target")
+            last = planner.last_retirement_age(profile)
+            stat(c[2], "Retire at", f"after {last}" if last >= profile.retire_age else "—",
+                 f"No age up to {last} reaches the target" if last >= profile.retire_age
+                 else f"Plan ends at {profile.plan_age}; retiring later would leave under {planner.MIN_RETIREMENT_YEARS} years of retirement")
 
 
 # ------------------------------------------------------------------ tab 2: recommendation
@@ -354,12 +371,21 @@ with tab_proj:
         stat(m[3], "Run-out risk", f"{res.ruin_while_alive*100:.0f}% → {res_stress.ruin_while_alive*100:.0f}%",
              "base → stress, while still alive",
              help="Chance of running out of money while still alive (each scenario weighted by survival odds).")
+        drop = res.success - res_stress.success
+        d_replay, d_corr = res.success - stress_parts["replay"], res.success - stress_parts["corr"]
+        if drop > 0.01 and d_replay >= 0.75 * drop:
+            verdict = "Almost all of the damage is the one bad year at retirement (sequence risk), not the correlations."
+        elif drop > 0.01 and d_corr >= 0.75 * drop:
+            verdict = "Most of the damage comes from stocks and bonds moving together over the whole plan."
+        else:
+            verdict = "Both ingredients matter."
         st.warning(md(
             f"**2022 stress test:** with your portfolio unchanged, a repeat of 2022 in your first year of retirement "
             f"(real losses: U.S. stocks {a.replay_2022[0]*100:.0f}%, bonds {a.replay_2022[3]*100:.0f}%, "
             f"TIPS {a.replay_2022[4]*100:.0f}%) plus stocks and bonds moving together cuts plan success from "
             f"{res.success*100:.0f}% to **{res_stress.success*100:.0f}%** "
-            f"({(res_stress.success-res.success)*100:+.0f} points). Sequence risk is largest right at retirement."))
+            f"({(res_stress.success-res.success)*100:+.0f} points). Taken separately: the 2022 replay alone → "
+            f"{stress_parts['replay']*100:.0f}%, stressed correlations alone → {stress_parts['corr']*100:.0f}%. {verdict}"))
         y_max = 1.05 * max(float(res.pct[90].max()), float(res_stress.pct[90].max()))
         c1, c2 = st.columns(2, gap="large")
         c1.plotly_chart(charts.fan_chart(res.ages, res.pct, profile.retire_age, "Base case", y_max),
