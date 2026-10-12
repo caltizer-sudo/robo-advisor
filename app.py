@@ -268,8 +268,9 @@ def levers_card() -> None:
         if res_stress is not None:
             head += f" · **{res_stress.success*100:.0f}% in the 2022 stress test**"
         st.markdown(md(head))
-        if res.success >= TARGET_SUCCESS:
-            st.markdown(f"You're above the {TARGET_SUCCESS*100:.0f}% confidence target. "
+        # judge 'on track' on the rounded number the user sees, so '85%' never pairs with 'to reach 85%'
+        if round(res.success * 100) >= round(TARGET_SUCCESS * 100):
+            st.markdown(f"You're at or above the {TARGET_SUCCESS*100:.0f}% confidence target. "
                         "Room to spare could fund earlier retirement or more spending:")
         else:
             st.markdown(f"To reach **{TARGET_SUCCESS*100:.0f}%**, make **any one** of these changes:")
